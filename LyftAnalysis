@@ -1,0 +1,193 @@
+---
+title: "Lyft Analysis"
+author: "Miguel Diaz"
+date: "2023-04-27"
+output: html_document
+---
+## **What constitutes the price of a Lyft and predicting the price of a Lyft ride.**
+
+#### *Data analysis of Lyft prices and variable's effect on price.*
+
+![](https://cdn.gobankingrates.com/wp-content/uploads/2018/05/lyfts-new-subscription-model-could-save-riders-hundreds-1.jpg?webp=1&w=675&quality=75)
+
+#### **The goal of this project is to find out which are the most relevant variables that Lyft takes into account when determining the price of a trip.** 
+#### The Variables in question are the following:
+* Hour of the day (hour)
+* Type of Lyft taken (RideType)
+* Distance (distance)
+* Temperature (temp)
+* Rain (precip)
+* Day or Night (atDark)
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(knitr)
+```
+### We begin our data prep by importing our data frames and mutating categorical variables to the appropriate factor data types. 
+#### **Import the data frames as tibbles to make them easier to manipulate**
+```{r}
+lyft.tb <- as_tibble(read.csv("lyft.csv", header = TRUE))
+predict.tb <- as_tibble(read.csv("predict.csv", header = TRUE))
+```
+#### **Use the str() function to analyze the data**
+```{r}
+str(lyft.tb)
+```
+
+#### **Task 1:Removing rows with missing values**
+```{r}
+good <- complete.cases(lyft.tb)
+lyft.tb.cl <- lyft.tb[good, ]
+```
+
+#### **Setting Levels**
+```{r}
+lyft.tb.cl <- mutate(lyft.tb.cl,
+                     rideType = as.factor(rideType),
+                     precip = as.factor(precip),
+                     atDark = as.factor(atDark))
+
+levels(lyft.tb.cl$rideType)
+levels(lyft.tb.cl$precip)
+levels(lyft.tb.cl$atDark)
+
+levels(lyft.tb.cl$rideType) <- c("lyft", "lyft_lux", "lyft_luxsuv", "lyft_plus", "lyft_premier")
+levels(lyft.tb.cl$precip) <- c("no", "yes")
+levels(lyft.tb.cl$atDark) <- c("no", "yes")
+
+
+
+predict.tb <- mutate(predict.tb,
+                     rideType = as.factor(rideType),
+                     precip = as.factor(precip),
+                     atDark = as.factor(atDark))
+
+levels(predict.tb$rideType)
+levels(predict.tb$precip)
+levels(predict.tb$atDark)
+
+levels(predict.tb$rideType) <- c("lyft", "lyft_lux", "lyft_luxsuv", "lyft_plus", "lyft_premier")
+levels(predict.tb$precip) <- c("no", "yes")
+levels(predict.tb$atDark) <- c("no", "yes")
+
+
+```
+#### Task 2 Create a boxplot
+```{r}
+bp <- ggplot(lyft.tb.cl, aes(x = rideType , y = price)) + geom_boxplot()
+bp
+```
+
+#### Task 3 Another viz
+```{r}
+ggplot(lyft.tb.cl, aes(x = rideType, y = price)) +
+  geom_point(aes(color = distance))+
+  geom_smooth(method = lm, se = FALSE)
+```
+##One clear correlation displayed with the price by ride type is the price of
+## ride increases as the distance of the ride increases.Addtionally the ride type
+## that on average has a higher price is luxury SUV compared to the others.
+
+#### **Task 4: Multi-step regression process**
+
+#### STEP 1: Build the baseline regression model.
+```{r}
+lyft.lm <- lm(price ~ hour + rideType + distance + temp + precip + atDark, data = lyft.tb.cl)
+
+lyft.lm
+```
+```{r}
+options(scipen = 4)
+summary(lyft.lm)
+```
+
+```{r}
+lm.results <- summary(lyft.lm)
+
+names(lm.results)
+```
+
+```{r}
+lm.results <- summary(lyft.lm)
+
+names(lm.results)
+```
+```{r}
+lm.coef <- lm.results$coefficients
+```
+
+### Interpret the overall model
+The F-statistic p-value is 2.2e-16, meaning the regression model is overall significant. This tells us that at least one of the explanatory variables is significantly related to the response variable.
+
+Non-significant variables include:
+hour: `r round(lm.coef[2,4], 2)`
+temp: `r round(lm.coef[8,4], 2)`
+precip: `r round(lm.coef[9,4], 2)`
+```{r}
+lyft.lm <- lm(price ~ rideType + distance + atDark, data = lyft.tb.cl)
+
+lyft.lm
+```
+
+```{r}
+options(scipen = 4)
+summary(lyft.lm)
+```
+
+
+### Step : Interpret the overall model
+```{r}
+lyft.lm <- lm(price ~ rideType + distance, data = lyft.tb.cl)
+lyft.lm
+
+summary(lyft.lm)
+```
+
+### Step 2: Interpret the regression (beta) coefficients
+```{r}
+lm.results <- summary(lyft.lm)
+
+names(lm.results)
+```
+```{r}
+lm.coef <- lm.results$coefficients
+lm.coef
+```
+```{r}
+class(lm.coef)
+```
+```{r}
+dim(lm.coef)
+```
+```{r}
+kable(lm.coef, digits = c(3,3,3,20))
+```
+
+
+
+
+
+### Step 3: Get the estimated regression equation
+#### EstimatedPrice = `r lm.coef[1,1]` + rideTypelyft_lux * `r lm.coef[2,1]` + rideTypelyft_luxsuv * `r lm.coef[3,1]` + rideTypelyft_plus * `r lm.coef[4,1]`+ rideTypelyft_premier * `r lm.coef[5,1]`+ distance * `r lm.coef[6,1]`
+
+### Step 4: Assess the model
+```{r}
+names(lm.results)
+```
+```{r}
+lm.results$r.squared
+```
+```{r}
+lm.results$adj.r.squared
+```
+
+
+### Step 5: Prediction
+```{r}
+predicted_price <- predict(lyft.lm, data.frame(predict.tb))
+
+predicted_price
+```
+
+
